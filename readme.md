@@ -33,7 +33,7 @@
 
 8. Install packages as usual, for example:
     ```
-    pip install requests
+    pipenv install requests
     ```
 9. If you are done working in the virtual environment for the moment, you can deactivate it
     ```
