@@ -1,15 +1,27 @@
 import os
 import requests
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, URL, text
 
 load_dotenv()
 
+# https://docs.sqlalchemy.org/en/20/core/engines.html#creating-urls-programmatically
+con_url = URL.create(
+    os.environ.get("DB_CONNECTION"),
+    username=os.environ.get("DB_USERNAME"),
+    password=os.environ.get("DB_PASSWORD"), # plain (unescaped) text
+    host=os.environ.get("DB_HOST"),
+    database=os.environ.get("DB_DATABASE"),
+    port=os.environ.get("DB_PORT"),
+    query={'charset': 'utf8mb4'}
+)
+engine  = create_engine(con_url, echo=True)
+# connect to database server 
+with engine.connect() as connection:
+    #executing the query
+    result = connection.execute(text("SELECT * FROM m_chat_ai_reply_context"))
+    # print(result.fetchall())
+    for row in result.mappings():
+        print("Context:" , row["context"])
 
-response = requests.get('https://httpbin.org/ip')
-print('Your IP is {0}'.format(response.json()['origin']))
-if 5 > 6:
-    print("Five is greater than two!")
-print("Five is greater than two!")
-db = os.environ.get("DB_DATABASE")
-print('Your DB is {0}'.format(db))
 # comment this 
