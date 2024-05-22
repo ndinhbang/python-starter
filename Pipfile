@@ -4,8 +4,6 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-requests = "==2.31.0"
-numpy = "==1.26.4"
 python-dotenv = "==1.0.1"
 sqlalchemy = "==2.0.30"
 mysqlclient = "==2.2.4"
