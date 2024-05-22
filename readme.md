@@ -51,3 +51,9 @@
     cd my_project
     pip install -r requirements.txt
     ```
+
+12. Run python file
+    ```
+    env\Scripts\activate
+    pipenv run python main.py
+    ```

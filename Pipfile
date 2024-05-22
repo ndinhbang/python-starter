@@ -4,8 +4,9 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-requests = "*"
-numpy = "*"
+requests = "==2.31.0"
+numpy = "==1.26.4"
+python-dotenv = "*"
 
 [dev-packages]
 
