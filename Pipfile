@@ -26,6 +26,9 @@ llama-index-vector-stores-chroma = "*"
 llama-index-readers-web = "*"
 llama-index-embeddings-instructor = "*"
 sentence-transformers = "==2.7.0"
+llama-index-llms-llama-cpp = "*"
+llama-cpp-python = "*"
+llama-index-readers-database = "*"
 
 [dev-packages]
 

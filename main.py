@@ -12,8 +12,19 @@ from llama_index.llms.ollama import Ollama
 from llama_index.readers.web import SimpleWebPageReader
 from llama_index.core.node_parser import SentenceSplitter, MarkdownNodeParser
 import chromadb
+from llama_index.core.schema import TextNode
+from llama_index.core.base.embeddings.base import BaseEmbedding
+from chromadb import EmbeddingFunction, Documents, Embeddings
+from llama_index.readers.database import DatabaseReader
 
 load_dotenv()
+
+class LlamaIndexEmbeddingAdapter(EmbeddingFunction):
+    def __init__(self, ef: BaseEmbedding):
+        self.ef = ef
+
+    def __call__(self, input: Documents) -> Embeddings:
+        return [node.embedding for node in self.ef([TextNode(text=doc) for doc in input])]
 
 Settings.chunk_size=1024
 Settings.chunk_overlap=20
@@ -22,21 +33,28 @@ Settings.chunk_overlap=20
 # https://docs.llamaindex.ai/en/stable/understanding/using_llms/using_llms/
 llm = Ollama(
     model="gemma:7b-instruct",
-    temperature=0.1,
+    temperature=0,
     request_timeout=600.0
 )
-Settings.llm = None
+Settings.llm = llm
 
 # define embedding model
 # https://docs.llamaindex.ai/en/stable/examples/embeddings/huggingface/
-embed_model = HuggingFaceEmbedding(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+embed_model = HuggingFaceEmbedding(
+    model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    # model_name="intfloat/multilingual-e5-large-instruct"
+)
 Settings.embed_model = embed_model
 
 # initialize client, setting path to save data
 # https://docs.llamaindex.ai/en/stable/understanding/storing/storing/
 db = chromadb.PersistentClient(path="./.data/chroma_db")
 # create or load collection
-chroma_collection = db.get_or_create_collection("quickstart")
+collection_name = "quickstart"
+chroma_collection = db.get_or_create_collection(
+    collection_name, 
+    embedding_function=LlamaIndexEmbeddingAdapter(embed_model)
+)
 # assign chroma as the vector_store to the context
 vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
 storage_context = StorageContext.from_defaults(vector_store=vector_store)
@@ -57,23 +75,37 @@ def load_documents_from_db():
         isolation_level="REPEATABLE READ", 
         echo=True
     )
+
+    query = "SELECT id,context FROM m_chat_ai_reply_context"
+    
+    documents = []
     # connect to database server 
+    # https://docs.llamaindex.ai/en/stable/module_guides/loading/documents_and_nodes/
     with engine.connect() as connection:
         # connection = connection.execution_options(isolation_level="READ COMMITTED")
         #executing the query
-        result = connection.execute(text("SELECT id,context FROM m_chat_ai_reply_context"))
+        result = connection.execute(text(query))
         # commit to prevent rollback log
         connection.commit()
 
-        return result
+        for row in result:
+            documents.append(Document(text=row.context))
 
-# https://docs.llamaindex.ai/en/stable/module_guides/loading/documents_and_nodes/
+    return documents
+
+    # reader = DatabaseReader(
+    #     engine=engine
+    # )
+
+    # documents = reader.load_data(query=query)
+    # return documents
+    
+
 def creat_document_from_text(text):
     return Document(text=text)
 
 def load_documents_from_urls(urls: List[str]):
     markdown_docs = SimpleWebPageReader(html_to_text=True).load_data(urls)
-    parser = MarkdownNodeParser()
     return markdown_docs
 
 def split_documents_to_chunks(documents):
@@ -84,8 +116,11 @@ def split_documents_to_chunks(documents):
 def index_documents():
     # load documents
     # https://docs.llamaindex.ai/en/stable/understanding/loading/loading/
-    documents = load_documents_from_urls(["https://www.abilive.vn/"])
-    text_splitter = MarkdownNodeParser()
+    # documents = load_documents_from_urls(["https://www.abilive.vn/"])
+    # text_splitter = MarkdownNodeParser()
+
+    documents = load_documents_from_db()
+    text_splitter = SentenceSplitter(chunk_size=1024, chunk_overlap=200)
 
     # indexing documents
     # https://docs.llamaindex.ai/en/stable/understanding/indexing/indexing/
@@ -109,11 +144,18 @@ def test_llm():
 def ask():
     # load your index from stored vectors
     vector_index = VectorStoreIndex.from_vector_store(
-        vector_store, storage_context=storage_context
+        vector_store,
+        embed_model=embed_model
     )
 
     query_engine = vector_index.as_query_engine()
     response = query_engine.query("Công ty làm về lĩnh vực gì ?")
+    print(response)
+    response = query_engine.query("Người đại diện công ty là ai ?")
+    print(response)
+    response = query_engine.query("Công ty có chi nhánh tại việt nam không ?")
+    print(response)
+    response = query_engine.query("Abilive Viet Nam Co., Ltd location ?")
     print(response)
      
 if __name__ == "__main__":

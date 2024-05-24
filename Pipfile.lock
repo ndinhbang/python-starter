@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "58b12e11d937893611f052144b058a6867bc20163bb6f204a73f5907107e3c4f"
+            "sha256": "d4884ce34befb3d4ac443b4c01f69e5a1593e6229b65084fa141cb85246c09c7"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -483,6 +483,14 @@
                 "sha256:90ca4a18f3ff30ce849d100dcf4a003953c79d3a2348ef056f1d9c22231a25fd"
             ],
             "version": "==1.0.8"
+        },
+        "diskcache": {
+            "hashes": [
+                "sha256:2c3a3fa2743d8535d832ec61c2054a1641f41775aa7c556758a109941e33e4fc",
+                "sha256:5e31b2d5fbad117cc363ebaf6b689474db18a1f6438bc82358b024abd4c2ca19"
+            ],
+            "markers": "python_version >= '3'",
+            "version": "==5.6.3"
         },
         "distro": {
             "hashes": [
@@ -1039,6 +1047,14 @@
             "markers": "python_version < '4.0' and python_full_version >= '3.8.1'",
             "version": "==0.1.63"
         },
+        "llama-cpp-python": {
+            "hashes": [
+                "sha256:a4e2ab6b74dc87f565a21e4f1617c030f92d5b341375d7173876d238613a50ab"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '3.8'",
+            "version": "==0.2.76"
+        },
         "llama-index": {
             "hashes": [
                 "sha256:5281cfa8b6e7f0f5f12897c00adcd790f7b51c130037f3561fd5630fca37bfb3",
@@ -1114,6 +1130,15 @@
             "markers": "python_version < '4.0' and python_full_version >= '3.8.1'",
             "version": "==0.9.48"
         },
+        "llama-index-llms-llama-cpp": {
+            "hashes": [
+                "sha256:58ab5f492946b46544a057cec6b98268b610dbd99462d749b69a63d11577aa6b",
+                "sha256:ef7f531ae1f567eb821f6b2662f4bfcfb5301d9f3649973e5c202bbab6979935"
+            ],
+            "index": "pypi",
+            "markers": "python_version < '4.0' and python_full_version >= '3.8.1'",
+            "version": "==0.1.3"
+        },
         "llama-index-llms-ollama": {
             "hashes": [
                 "sha256:62c45b2b0961dce66b7e2a4b8072888920f78516cdc08bdd7a7dc56a6dcf2f8f",
@@ -1154,6 +1179,15 @@
             ],
             "markers": "python_version < '4.0' and python_full_version >= '3.8.1'",
             "version": "==0.1.3"
+        },
+        "llama-index-readers-database": {
+            "hashes": [
+                "sha256:73cbaa5b627c90c01693a187180535c495205bdc6ba258804b00631409a79e74",
+                "sha256:c7bd7eb330cd0d935a55cf00317aee2afc52357839eb589b136fa4c79df31df2"
+            ],
+            "index": "pypi",
+            "markers": "python_version < '4.0' and python_full_version >= '3.8.1'",
+            "version": "==0.1.4"
         },
         "llama-index-readers-file": {
             "hashes": [
