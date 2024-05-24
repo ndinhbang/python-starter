@@ -2,37 +2,44 @@ import os
 import sys
 from typing import List
 from dotenv import load_dotenv
-from sentence_transformers import SentenceTransformer
 from sqlalchemy import create_engine, URL, text
-from llama_index.core import Document, VectorStoreIndex, SimpleDirectoryReader
+from llama_index.core import Settings, Document, VectorStoreIndex, StorageContext, load_index_from_storage
 from llama_index.vector_stores.chroma import ChromaVectorStore
-from llama_index.core import StorageContext
 from llama_index.core.llms import ChatMessage
+# from llama_index.embeddings.instructor import InstructorEmbedding
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.llms.ollama import Ollama
 from llama_index.readers.web import SimpleWebPageReader
-from llama_index.core.node_parser import SentenceSplitter, SemanticSplitterNodeParser
+from llama_index.core.node_parser import SentenceSplitter, MarkdownNodeParser
 import chromadb
 
 load_dotenv()
 
-db = chromadb.PersistentClient(path="./data")
-chroma_collection = db.get_or_create_collection("quickstart")
-vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
-storage_context = StorageContext.from_defaults(vector_store=vector_store)
+Settings.chunk_size=1024
+Settings.chunk_overlap=20
 
+# load llm
+# https://docs.llamaindex.ai/en/stable/understanding/using_llms/using_llms/
 llm = Ollama(
     model="gemma:7b-instruct",
     temperature=0.1,
     request_timeout=600.0
 )
+Settings.llm = None
 
-# https://huggingface.co/intfloat/multilingual-e5-large-instruct
-embed_model = SentenceTransformer(
-    # 'sentence-transformers/paraphrase-multilingual-mpnet-base-v2'
-    'intfloat/multilingual-e5-large-instruct'
-)
+# define embedding model
+# https://docs.llamaindex.ai/en/stable/examples/embeddings/huggingface/
+embed_model = HuggingFaceEmbedding(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+Settings.embed_model = embed_model
 
+# initialize client, setting path to save data
+# https://docs.llamaindex.ai/en/stable/understanding/storing/storing/
+db = chromadb.PersistentClient(path="./.data/chroma_db")
+# create or load collection
+chroma_collection = db.get_or_create_collection("quickstart")
+# assign chroma as the vector_store to the context
+vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
 def load_documents_from_db():
     # https://docs.sqlalchemy.org/en/20/core/engines.html#creating-urls-programmatically
@@ -63,70 +70,54 @@ def load_documents_from_db():
 # https://docs.llamaindex.ai/en/stable/module_guides/loading/documents_and_nodes/
 def creat_document_from_text(text):
     return Document(text=text)
-    
+
 def load_documents_from_urls(urls: List[str]):
-    documents = SimpleWebPageReader(html_to_text=True).load_data(urls)
-    return documents
+    markdown_docs = SimpleWebPageReader(html_to_text=True).load_data(urls)
+    parser = MarkdownNodeParser()
+    return markdown_docs
 
 def split_documents_to_chunks(documents):
     parser = SentenceSplitter(chunk_size=1024, chunk_overlap=20)
     nodes = parser.get_nodes_from_documents(documents)
     return nodes
 
-# def embed_chunks(chunks):
-    
-
 def index_documents():
+    # load documents
+    # https://docs.llamaindex.ai/en/stable/understanding/loading/loading/
     documents = load_documents_from_urls(["https://www.abilive.vn/"])
-    chunks = split_documents_to_chunks(documents)
+    text_splitter = MarkdownNodeParser()
 
-    index = VectorStoreIndex.from_documents(
+    # indexing documents
+    # https://docs.llamaindex.ai/en/stable/understanding/indexing/indexing/
+    vector_index = VectorStoreIndex.from_documents(
         documents,
         storage_context=storage_context, 
-        embed_model=embed_model
+        embed_model=embed_model,
+        transformations=[text_splitter]
     )
 
-    # for index, row in enumerate(chunks):
-    #      print(f"Node {index + 1}: \n" , row)
+    # Query Data
+    # https://docs.llamaindex.ai/en/stable/understanding/querying/querying/
+    # query_engine = vector_index.as_query_engine()
+    # response = query_engine.query("Công ty làm về lĩnh vực gì ?")
+    # print(response)
+
+def test_llm():
+    response = llm.complete("Hồ Chí Minh là ai ?")
+    print(response)
 
 def ask():
-    resp = llm.complete("Who is Paul Graham?")
-    print(resp)
-    # text_splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=0)
-    # all_splits = text_splitter.split_text(data)
-    # print(all_splits)
-    # for index, row in enumerate(all_splits):
-    #      print(f"Node {index + 1}: \n" , row)
+    # load your index from stored vectors
+    vector_index = VectorStoreIndex.from_vector_store(
+        vector_store, storage_context=storage_context
+    )
 
-    # text_splitter = CharacterTextSplitter.from_tiktoken_encoder(chunk_size=8192, chunk_overlap=100)
-    # doc_splits = text_splitter.split_documents(data)
-    # print(doc_splits)
-
-    # Create a vector store using Chroma DB, our chunked data from the URLs, and the nomic-embed-text embedding model
-    # vectorstore = Chroma.from_documents(
-    #     documents=doc_splits,
-    #     collection_name="rag-chroma",
-    #     embedding=embeddings.ollama.OllamaEmbeddings(model='nomic-embed-text'),
-    # )
-    # retriever = vectorstore.as_retriever()
-
-    # splitter = SentenceSplitter(
-    #     chunk_size=512,
-    #     # chunk_overlap=20,
-    # )
-    
-    # rows = load_documents_from_db()
-
-    # for row in rows:
-    #     chunks = splitter.get_nodes_from_documents(text=row.context)
-    #     for index, chunk in enumerate(chunks):
-    #         print(f"Node {index + 1}: \n" , chunk)
-    #     print("Context:" , row.context)
-
+    query_engine = vector_index.as_query_engine()
+    response = query_engine.query("Công ty làm về lĩnh vực gì ?")
+    print(response)
      
 if __name__ == "__main__":
     if sys.argv[1] == 'index':
-        print("Indexing documents")
         index_documents()
         sys.exit(1)
 
