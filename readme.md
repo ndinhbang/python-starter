@@ -14,7 +14,7 @@
 
 5. Create `venv` virtual environment and activate it
    ```
-   python -m venv env
+   python -m venv .venv
    env\Scripts\activate
    ```
 6. Install `pipenv` inside virtual environment
@@ -54,6 +54,6 @@
 
 12. Run python file
     ```
-    env\Scripts\activate
+    .venv\Scripts\activate
     pipenv run python main.py
     ```
