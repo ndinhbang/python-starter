@@ -1,63 +1,26 @@
 import os
-import sys
-from typing import List
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, URL, text
-from llama_index.core import Settings, Document, VectorStoreIndex, StorageContext, load_index_from_storage
-from llama_index.vector_stores.chroma import ChromaVectorStore
-from llama_index.core.llms import ChatMessage
-# from llama_index.embeddings.instructor import InstructorEmbedding
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.llms.ollama import Ollama
-from llama_index.readers.web import SimpleWebPageReader
-from llama_index.core.node_parser import SentenceSplitter, MarkdownNodeParser
-import chromadb
-from llama_index.core.schema import TextNode
-from llama_index.core.base.embeddings.base import BaseEmbedding
-from chromadb import EmbeddingFunction, Documents, Embeddings
-from llama_index.readers.database import DatabaseReader
+from langchain_community.chat_models import ChatOllama
+# from langchain_community.embeddings.ollama import OllamaEmbeddings
+from langchain_community.embeddings.sentence_transformer import (
+    SentenceTransformerEmbeddings,
+)
+from langchain_community.vectorstores import Chroma
+from langchain_text_splitters import CharacterTextSplitter
+from langchain_community.document_loaders import WebBaseLoader
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
 
 load_dotenv()
 
-class LlamaIndexEmbeddingAdapter(EmbeddingFunction):
-    def __init__(self, ef: BaseEmbedding):
-        self.ef = ef
-
-    def __call__(self, input: Documents) -> Embeddings:
-        return [node.embedding for node in self.ef([TextNode(text=doc) for doc in input])]
-
-Settings.chunk_size=1024
-Settings.chunk_overlap=20
-
 # load llm
 # https://docs.llamaindex.ai/en/stable/understanding/using_llms/using_llms/
-llm = Ollama(
+llm = ChatOllama(
     model="gemma:7b-instruct",
     temperature=0,
-    request_timeout=600.0
 )
-Settings.llm = llm
-
-# define embedding model
-# https://docs.llamaindex.ai/en/stable/examples/embeddings/huggingface/
-embed_model = HuggingFaceEmbedding(
-    model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-    # model_name="intfloat/multilingual-e5-large-instruct"
-)
-Settings.embed_model = embed_model
-
-# initialize client, setting path to save data
-# https://docs.llamaindex.ai/en/stable/understanding/storing/storing/
-db = chromadb.PersistentClient(path="./.data/chroma_db")
-# create or load collection
-collection_name = "quickstart"
-chroma_collection = db.get_or_create_collection(
-    collection_name, 
-    embedding_function=LlamaIndexEmbeddingAdapter(embed_model)
-)
-# assign chroma as the vector_store to the context
-vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
-storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
 def load_documents_from_db():
     # https://docs.sqlalchemy.org/en/20/core/engines.html#creating-urls-programmatically
@@ -89,79 +52,63 @@ def load_documents_from_db():
         connection.commit()
 
         for row in result:
-            documents.append(Document(text=row.context))
+            documents.append(row.context)
 
     return documents
 
-    # reader = DatabaseReader(
-    #     engine=engine
-    # )
-
-    # documents = reader.load_data(query=query)
-    # return documents
-    
-
-def creat_document_from_text(text):
-    return Document(text=text)
-
-def load_documents_from_urls(urls: List[str]):
-    markdown_docs = SimpleWebPageReader(html_to_text=True).load_data(urls)
-    return markdown_docs
-
-def split_documents_to_chunks(documents):
-    parser = SentenceSplitter(chunk_size=1024, chunk_overlap=20)
-    nodes = parser.get_nodes_from_documents(documents)
-    return nodes
-
-def index_documents():
-    # load documents
-    # https://docs.llamaindex.ai/en/stable/understanding/loading/loading/
-    # documents = load_documents_from_urls(["https://www.abilive.vn/"])
-    # text_splitter = MarkdownNodeParser()
-
-    documents = load_documents_from_db()
-    text_splitter = SentenceSplitter(chunk_size=1024, chunk_overlap=200)
-
-    # indexing documents
-    # https://docs.llamaindex.ai/en/stable/understanding/indexing/indexing/
-    vector_index = VectorStoreIndex.from_documents(
-        documents,
-        storage_context=storage_context, 
-        embed_model=embed_model,
-        transformations=[text_splitter]
-    )
-
-    # Query Data
-    # https://docs.llamaindex.ai/en/stable/understanding/querying/querying/
-    # query_engine = vector_index.as_query_engine()
-    # response = query_engine.query("Công ty làm về lĩnh vực gì ?")
-    # print(response)
-
-def test_llm():
-    response = llm.complete("Hồ Chí Minh là ai ?")
-    print(response)
-
 def ask():
-    # load your index from stored vectors
-    vector_index = VectorStoreIndex.from_vector_store(
-        vector_store,
-        embed_model=embed_model
+    # Load documents from URLs
+    urls = [
+        "https://www.abilive.vn/"
+    ]
+    docs = [WebBaseLoader(url).load() for url in urls]
+    docs_list = [item for sublist in docs for item in sublist]
+
+    # split it into chunks
+    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+    chunks = text_splitter.split_documents(docs_list)
+
+    # create the open-source embedding function
+    embedding = SentenceTransformerEmbeddings(model_name="paraphrase-multilingual-MiniLM-L12-v2")
+
+    # load it into Chroma
+    db = Chroma.from_documents(
+        documents=chunks, 
+        embedding=embedding,
+        collection_name='website'
     )
 
-    query_engine = vector_index.as_query_engine()
-    response = query_engine.query("Công ty làm về lĩnh vực gì ?")
-    print(response)
-    response = query_engine.query("Người đại diện công ty là ai ?")
-    print(response)
-    response = query_engine.query("Công ty có chi nhánh tại việt nam không ?")
-    print(response)
-    response = query_engine.query("Abilive Viet Nam Co., Ltd location ?")
-    print(response)
+    retriever = db.as_retriever(
+        search_type="mmr", 
+        search_kwargs={'k': 2}
+    )
+
+    # Create a question / answer pipeline 
+    rag_template = """You are an assistant for question-answering tasks. Use the following pieces of retrieved context to answer the question. If you don't know the answer, just say that you don't know. Use three sentences maximum and keep the answer concise.
+Question: {question} 
+Context: {context} 
+Answer:
+    """
+    rag_prompt = ChatPromptTemplate.from_template(rag_template)
+    rag_chain = (
+        {"context": retriever, "question": RunnablePassthrough()}
+        | rag_prompt
+        | llm
+        | StrOutputParser()
+    )
+
+    # question = 'Người đại diện công ty là ai ?'
+    # question = '所在地 ベトナムオフィス ?'
+    # question = 'location of Hokkaido Branch ?'
+    # question = 'address of Hokkaido Branch ?'
+    # question = '名古屋本社の所在地 ?'
+    # question = 'アビリブの3つの特長 ?'
+    # question = 'telephone number of Nagoya Head Office ?'
+    question = 'introduce Abilive Vietnam ?'
+
+    # Invoke the pipeline
+    print(rag_chain.invoke(question))
      
 if __name__ == "__main__":
-    if sys.argv[1] == 'index':
-        index_documents()
-        sys.exit(1)
-
-    answer = ask()
+    ask()
     # print(answer)
