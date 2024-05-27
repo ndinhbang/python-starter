@@ -12,6 +12,7 @@ from langchain_community.document_loaders import WebBaseLoader
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.documents import Document
 
 load_dotenv()
 
@@ -21,6 +22,10 @@ llm = ChatOllama(
     model="gemma:7b-instruct",
     temperature=0,
 )
+
+ # create the open-source embedding function
+embedding = SentenceTransformerEmbeddings(model_name="paraphrase-multilingual-MiniLM-L12-v2")
+
 
 def load_documents_from_db():
     # https://docs.sqlalchemy.org/en/20/core/engines.html#creating-urls-programmatically
@@ -52,37 +57,37 @@ def load_documents_from_db():
         connection.commit()
 
         for row in result:
-            documents.append(row.context)
+            documents.append(Document(page_content=row.context, metadata={"source": "local"}))
 
     return documents
 
-def ask():
-    # Load documents from URLs
-    urls = [
-        "https://www.abilive.vn/"
-    ]
-    docs = [WebBaseLoader(url).load() for url in urls]
-    docs_list = [item for sublist in docs for item in sublist]
+# Load documents from URLs
+urls = [
+    "https://www.abilive.vn/"
+]
+docs = [WebBaseLoader(url).load() for url in urls]
+docs_list = [item for sublist in docs for item in sublist]
 
-    # split it into chunks
-    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
-    chunks = text_splitter.split_documents(docs_list)
+# docs_list = load_documents_from_db()
 
-    # create the open-source embedding function
-    embedding = SentenceTransformerEmbeddings(model_name="paraphrase-multilingual-MiniLM-L12-v2")
+# split it into chunks
+text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+chunks = text_splitter.split_documents(docs_list)
 
-    # load it into Chroma
-    db = Chroma.from_documents(
-        documents=chunks, 
-        embedding=embedding,
-        collection_name='website'
-    )
+# load it into Chroma
+db = Chroma.from_documents(
+    documents=chunks, 
+    embedding=embedding,
+    collection_name='website'
+)
 
-    retriever = db.as_retriever(
-        search_type="mmr", 
-        search_kwargs={'k': 2}
-    )
+retriever = db.as_retriever(
+    search_type="mmr", 
+    search_kwargs={'k': 2}
+)
 
+def ask(question):
+    
     # Create a question / answer pipeline 
     rag_template = """You are an assistant for question-answering tasks. Use the following pieces of retrieved context to answer the question. If you don't know the answer, just say that you don't know. Use three sentences maximum and keep the answer concise.
 Question: {question} 
@@ -104,11 +109,19 @@ Answer:
     # question = '名古屋本社の所在地 ?'
     # question = 'アビリブの3つの特長 ?'
     # question = 'telephone number of Nagoya Head Office ?'
-    question = 'introduce Abilive Vietnam ?'
+    # question = 'introduce Abilive Vietnam ?'
 
     # Invoke the pipeline
-    print(rag_chain.invoke(question))
+    return rag_chain.invoke(question)
      
 if __name__ == "__main__":
-    ask()
-    # print(answer)
+    while True:
+        try:
+            question = input("Question: ")
+            answer = ask(question)
+            print(answer)
+        except KeyboardInterrupt:
+            break
+        except:
+            continue
+    
